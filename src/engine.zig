@@ -176,12 +176,29 @@ pub const Shader = struct {
     pub fn comptile(self: *Self) void {
         self.vertex_shader = gl.createShader(gl.VERTEX_SHADER);
 
+        var error_log: [512]u8 = [_]u8{0} ** 512;
+
+        var success: i32 = undefined;
+
         gl.shaderSource(self.vertex_shader, 1, &self.vertex_source.ptr, null);
         gl.compileShader(self.vertex_shader);
+        gl.getShaderiv(self.vertex_shader, gl.COMPILE_STATUS, &success);
+        //fail to compile
+        if (success == 0) {
+            gl.getShaderInfoLog(self.vertex_shader, 512, null, error_log[0..]);
+            std.log.err("vertex shader err: {s}", .{error_log});
+        }
 
         self.fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
         gl.shaderSource(self.fragment_shader, 1, &self.fragment_source.ptr, null);
         gl.compileShader(self.fragment_shader);
+
+        gl.getShaderiv(self.fragment_shader, gl.COMPILE_STATUS, &success);
+        //fail to compile
+        if (success == 0) {
+            gl.getShaderInfoLog(self.fragment_shader, 512, null, error_log[0..]);
+            std.log.err("fragmen shader err: {s}", .{error_log});
+        }
 
         self.program = gl.createProgram();
 
