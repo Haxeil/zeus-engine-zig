@@ -37,11 +37,17 @@ pub const Engine = struct {
         const proc: glfw.GLProc = undefined;
         try gl.load(proc, glGetProcAddress);
 
-        return .{
+        var engine = Engine{
             .window = window,
             .engine_time = try time.EngineTime.init(),
             .timer = try std.time.Timer.start(),
         };
+
+        engine.camera.engine = &engine;
+
+        engine.camera.update_projection_matrix();
+
+        return engine;
     }
 
     pub fn is_running(self: *Self) bool {
@@ -56,7 +62,7 @@ pub const Engine = struct {
             self.engine_time.?.updates += 1;
             self.engine_time.?.delta -= 1;
 
-            gl.clearColor(0.4, 1.0, 0.3, 0.1);
+            gl.clearColor(0.960, 0.960, 0.960, 1);
         }
 
         return !self.window.?.shouldClose();
@@ -90,6 +96,26 @@ pub const Engine = struct {
 pub const Camera = struct {
     projection_matrix: math.Mat4x4 = math.Mat4x4.ident,
     view_matrix: math.Mat4x4 = math.Mat4x4.ident,
+    engine: *Engine = undefined,
+
+    near_plane: f32 = -1 + 0.1,
+    far_plane: f32 = 1_000,
+    fov: f32 = 75,
+    aspect_ration: f32 = 1,
+
+    pub fn update_projection_matrix(self: *Camera) void {
+        const width = glfw.Window.getSize(self.engine.window.?).width;
+        const height = glfw.Window.getSize(self.engine.window.?).height;
+
+        self.aspect_ration = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromInt(height));
+
+        self.projection_matrix = math.Mat4x4.perspective(
+            math.degreesToRadians(f32, self.fov),
+            self.aspect_ration,
+            self.near_plane,
+            self.far_plane,
+        );
+    }
 };
 
 pub const Mesh = struct {
@@ -164,6 +190,12 @@ pub const Shader = struct {
     vertex_shader: u32 = undefined,
     fragment_shader: u32 = undefined,
 
+    const Error = error{
+        VertexShaderCompilation,
+        FragmentShaderCompilation,
+        InvalidUniformName,
+    };
+
     const Self = @This();
 
     pub fn init(comptime vertex_path: []const u8, comptime fragment_path: []const u8) Shader {
@@ -173,7 +205,7 @@ pub const Shader = struct {
         };
     }
 
-    pub fn comptile(self: *Self) void {
+    pub fn comptile(self: *Self) !void {
         self.vertex_shader = gl.createShader(gl.VERTEX_SHADER);
 
         var error_log: [512]u8 = [_]u8{0} ** 512;
@@ -186,7 +218,8 @@ pub const Shader = struct {
         //fail to compile
         if (success == 0) {
             gl.getShaderInfoLog(self.vertex_shader, 512, null, error_log[0..]);
-            std.log.err("vertex shader err: {s}", .{error_log});
+            std.log.err("vertex shader err: \n{s}", .{error_log});
+            return Error.VertexShaderCompilation;
         }
 
         self.fragment_shader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -197,7 +230,8 @@ pub const Shader = struct {
         //fail to compile
         if (success == 0) {
             gl.getShaderInfoLog(self.fragment_shader, 512, null, error_log[0..]);
-            std.log.err("fragmen shader err: {s}", .{error_log});
+            std.log.err("fragmen shader err: \n{s}", .{error_log});
+            return Error.FragmentShaderCompilation;
         }
 
         self.program = gl.createProgram();
@@ -219,11 +253,30 @@ pub const Shader = struct {
         gl.deleteShader(self.fragment_shader);
     }
 
-    pub fn set_vec3(uniform_location: i32, vec: math.Vec3) void {
-        gl.uniform3fv(uniform_location, 1, &vec.v[0]);
-    }
+    // pub fn set_vec3(uniform_location: i32, vec: math.Vec3) void {
+    //     gl.uniform3fv(uniform_location, 1, &vec.v[0]);
+    // }
 
-    pub fn set_matrix(uniform_location: i32, matrix: math.Mat4x4) void {
-        gl.uniformMatrix4fv(uniform_location, 1, gl.FALSE, &matrix.v[0].v[0]);
+    // pub fn set_matrix(uniform_location: i32, matrix: math.Mat4x4) void {
+    //     gl.uniformMatrix4fv(uniform_location, 1, gl.FALSE, &matrix.v[0].v[0]);
+    // }
+
+    pub fn set_uniform(self: Self, uniform: [*c]const u8, value: anytype) !void {
+        // gets location of uniform from a string
+        const location: i32 = gl.getUniformLocation(self.program, uniform);
+        // checks if the index is valid (uniform found !)
+        if (location == -1) return Error.InvalidUniformName;
+
+        switch (@TypeOf(value)) {
+            i32 => gl.uniform1i(location, value),
+            f32 => gl.uniform1f(location, value),
+            math.Vec2 => gl.uniform2fv(location, 1, &value.v[0]),
+            math.Vec3 => gl.uniform3fv(location, 1, &value.v[0]),
+            math.Vec4 => gl.uniform4fv(location, 1, &value.v[0]),
+            math.Mat4x4 => gl.uniformMatrix4fv(location, 1, gl.FALSE, &value.v[0].v[0]),
+            else => {
+                @compileError("unsupported type: " ++ @typeName(value));
+            },
+        }
     }
 };
