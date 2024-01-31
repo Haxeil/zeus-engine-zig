@@ -21,6 +21,10 @@ pub const Engine = struct {
     engine_time: ?time.EngineTime = undefined,
     timer: ?std.time.Timer = undefined,
 
+    const Error = error{
+        GLError,
+    };
+
     const Self = @This();
 
     pub fn init(width: u32, height: u32, comptime title: [*:0]const u8) !Engine {
@@ -137,7 +141,7 @@ pub const Mesh = struct {
         };
     }
 
-    pub fn create(self: *Self) void {
+    pub fn create(self: *Self) !void {
         gl.genVertexArrays(1, &self.vao);
 
         gl.genBuffers(1, &self.vbo);
@@ -158,13 +162,17 @@ pub const Mesh = struct {
         gl.bindBuffer(gl.ARRAY_BUFFER, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
         gl.bindVertexArray(0);
+
+        try gl_log();
     }
 
-    pub fn bind(self: *Self) void {
+    pub fn bind(self: *Self) !void {
         gl.bindVertexArray(self.vao);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.ibo);
 
         gl.drawElements(gl.TRIANGLES, @intCast(self.indices.items.len), gl.UNSIGNED_INT, null);
+
+        try gl_log();
     }
 
     pub fn deinit(self: *Self) void {
@@ -240,12 +248,14 @@ pub const Shader = struct {
         gl.attachShader(self.program, self.fragment_shader);
         gl.linkProgram(self.program);
 
+        try gl_log();
         //defer gl.deleteProgram(shader_program);
 
     }
 
-    pub fn bind(self: Self) void {
+    pub fn bind(self: Self) !void {
         gl.useProgram(self.program);
+        try gl_log();
     }
 
     pub fn deinit(self: *Self) void {
@@ -278,5 +288,29 @@ pub const Shader = struct {
                 @compileError("unsupported type: " ++ @typeName(value));
             },
         }
+        try gl_log();
     }
 };
+
+pub fn gl_log() !void {
+    var err: gl.GLenum = gl.getError();
+    const has_err = err != gl.getError();
+    while (err != gl.NO_ERROR) {
+        var err_string = switch (err) {
+            gl.INVALID_ENUM => "INVALID_ENUM",
+            gl.INVALID_VALUE => "INVALID_VALUE",
+            gl.INVALID_OPERATION => "INVALID_OPERATION",
+            gl.OUT_OF_MEMORY => "OUT_OF_MEMORY",
+            gl.INVALID_FRAMEBUFFER_OPERATION => "INVALID_FRAMEBUFFER_OPERATION",
+            else => "UNKNOWN_ERROR",
+        };
+
+        std.log.err("Found OpenGL error: {s}", .{err_string});
+
+        err = gl.getError();
+    }
+
+    if (has_err) {
+        return Engine.Error.GLError;
+    }
+}

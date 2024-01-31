@@ -34,8 +34,8 @@ pub fn main() !void {
     //Mesh
     var mesh = Engine.Mesh.init(allocator);
     defer mesh.deinit();
-    mesh.copy_data(&vertices, &indicies) catch {};
-    mesh.create();
+    try mesh.copy_data(&vertices, &indicies);
+    try mesh.create();
 
     var mesh2 = Engine.Mesh.init(allocator);
     defer mesh2.deinit();
@@ -79,7 +79,7 @@ pub fn main() !void {
         3, 2, 6,
     }) catch {};
 
-    mesh3.create();
+    try mesh3.create();
 
     mesh2.vertices.appendSlice(&.{
         // front
@@ -114,7 +114,7 @@ pub fn main() !void {
         3, 2, 6,
         6, 7, 3,
     }) catch {};
-    mesh2.create();
+    try mesh2.create();
     //Shader
     var shader = Engine.Shader.init("shader/vertex.glsl", "shader/fragment.glsl");
 
@@ -148,7 +148,7 @@ pub fn main() !void {
 
         const motion_matrix = math.Mat4x4.translate(cam_offset);
         engine.camera.view_matrix = math.Mat4x4.ident.mul(&motion_matrix);
-        shader.bind();
+        try shader.bind();
         // Engine.Shader.set_matrix(0, engine.camera.projection_matrix);
         const time: f32 = @floatCast(glfw.getTime());
         motion.v[0] = math.sin(time);
@@ -159,9 +159,9 @@ pub fn main() !void {
         try shader.set_uniform("_p", engine.camera.projection_matrix);
         try shader.set_uniform("_v", engine.camera.view_matrix);
 
-        mesh.bind();
-        mesh2.bind();
-        mesh3.bind();
+        try mesh.bind();
+        try mesh2.bind();
+        try mesh3.bind();
         try engine.update_time();
     }
 }
