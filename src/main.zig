@@ -9,7 +9,6 @@ pub fn main() !void {
     var engine = try Engine.Engine.init(1200, 800, "zeus-zig | frames: {0} , updates: {0}, delta: {0}");
     defer engine.deinit();
 
-    engine.camera.projection_matrix = math.Mat4x4.perspective(math.degreesToRadians(f32, 90), 1, -1.1, 10_000);
     var cam_offset = math.vec3(0, 0, 10);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -40,6 +39,48 @@ pub fn main() !void {
 
     var mesh2 = Engine.Mesh.init(allocator);
     defer mesh2.deinit();
+
+    var mesh3 = Engine.Mesh.init(allocator);
+    defer mesh3.deinit();
+
+    mesh3.vertices.appendSlice(&.{
+        0.5,  0.5, 0.5,
+        -0.1, 0.0, 1.0,
+        1.1,  0.0, 1.0,
+        0.0,  0.0, 0.0,
+        1.0,  0.0,
+        0.0,
+        // back
+    }) catch {};
+
+    mesh3.indices.appendSlice(&.{
+        // front
+        2, 3, 0,
+        0, 1, 2,
+
+        // right
+        6, 2, 1,
+        1, 5, 6,
+
+        // back
+        5, 4, 7,
+        7, 6, 5,
+
+        // left
+        3, 7, 4,
+        4, 0, 3,
+
+        // bottom
+        1, 0, 4,
+        4, 5, 1,
+
+        // top
+        6, 7, 3,
+        3, 2, 6,
+    }) catch {};
+
+    mesh3.create();
+
     mesh2.vertices.appendSlice(&.{
         // front
         -1.0, -1.0, 1.0,
@@ -78,7 +119,7 @@ pub fn main() !void {
     var shader = Engine.Shader.init("shader/vertex.glsl", "shader/fragment.glsl");
 
     defer shader.deinit();
-    shader.comptile();
+    try shader.comptile();
 
     var motion = math.vec3(0, 0, 0);
 
@@ -86,16 +127,24 @@ pub fn main() !void {
 
     while (engine.is_running()) {
         if (engine.window.?.getKey(.w) == glfw.Action.press) {
-            cam_offset.v[2] -= 0.1 * engine.engine_time.?.delta * speed;
+            cam_offset.v[2] -= 0.01 * engine.engine_time.?.delta * speed;
         } else if (engine.window.?.getKey(.s) == glfw.Action.press) {
-            cam_offset.v[2] += 0.1 * engine.engine_time.?.delta * speed;
+            cam_offset.v[2] += 0.01 * engine.engine_time.?.delta * speed;
         }
 
         if (engine.window.?.getKey(.d) == glfw.Action.press) {
-            cam_offset.v[0] -= 0.1 * engine.engine_time.?.delta * speed;
+            cam_offset.v[0] -= 0.01 * engine.engine_time.?.delta * speed;
         } else if (engine.window.?.getKey(.a) == glfw.Action.press) {
-            cam_offset.v[0] += 0.1 * engine.engine_time.?.delta * speed;
+            cam_offset.v[0] += 0.01 * engine.engine_time.?.delta * speed;
         }
+
+        if (engine.window.?.getKey(.q) == glfw.Action.press) {
+            cam_offset.v[1] -= 0.01 * engine.engine_time.?.delta * speed;
+        } else if (engine.window.?.getKey(.e) == glfw.Action.press) {
+            cam_offset.v[1] += 0.01 * engine.engine_time.?.delta * speed;
+        }
+
+        // engine.camera.update_projection_matrix();
 
         const motion_matrix = math.Mat4x4.translate(cam_offset);
         engine.camera.view_matrix = math.Mat4x4.ident.mul(&motion_matrix);
@@ -103,12 +152,16 @@ pub fn main() !void {
         // Engine.Shader.set_matrix(0, engine.camera.projection_matrix);
         const time: f32 = @floatCast(glfw.getTime());
         motion.v[0] = math.sin(time);
-        Engine.Shader.set_vec3(0, motion);
-        Engine.Shader.set_matrix(1, engine.camera.projection_matrix);
-        Engine.Shader.set_matrix(2, engine.camera.view_matrix);
+        // Engine.Shader.set_vec3(0, motion);
+        // Engine.Shader.set_matrix(1, engine.camera.projection_matrix);
+        // Engine.Shader.set_matrix(2, engine.camera.view_matrix);
+        try shader.set_uniform("_offset", motion);
+        try shader.set_uniform("_p", engine.camera.projection_matrix);
+        try shader.set_uniform("_v", engine.camera.view_matrix);
 
         mesh.bind();
         mesh2.bind();
+        mesh3.bind();
         try engine.update_time();
     }
 }
