@@ -3,6 +3,9 @@ const gl = @import("gl");
 const glfw = @import("mach-glfw");
 const time = @import("time.zig");
 const math = @import("math/main.zig");
+const c = @cImport({
+    @cInclude("stb_image.h");
+});
 
 /// Default GLFW error handling callback
 fn errorCallback(error_code: glfw.ErrorCode, description: [:0]const u8) void {
@@ -19,7 +22,7 @@ pub const Engine = struct {
     camera: Camera = .{},
 
     engine_time: ?time.EngineTime = undefined,
-    timer: ?std.time.Timer = undefined,
+    timer: f64 = 0.0,
 
     const Error = error{
         GLError,
@@ -41,12 +44,15 @@ pub const Engine = struct {
         const proc: glfw.GLProc = undefined;
         try gl.load(proc, glGetProcAddress);
 
+        var get_time = try std.time.Timer.start();
+
         var engine = Engine{
             .window = window,
-            .engine_time = try time.EngineTime.init(),
-            .timer = try std.time.Timer.start(),
+            .engine_time = try time.EngineTime.init(&get_time),
+            .timer = @floatFromInt(std.time.milliTimestamp()),
         };
 
+        std.debug.print("timer: {}", .{engine.timer});
         engine.camera.engine = &engine;
 
         engine.camera.update_projection_matrix();
@@ -75,9 +81,10 @@ pub const Engine = struct {
     pub fn update_time(self: *Self) !void {
         self.engine_time.?.frames += 1;
         var allocator = std.heap.page_allocator;
-        if (self.timer.?.read() / 1_000_000 > 1_000) {
-            self.timer.?.reset();
 
+        if ((@as(f64, @floatFromInt(std.time.milliTimestamp())) - self.timer) >= 1_000) {
+            self.timer += 1_000;
+            // not working
             var raw_string = try std.fmt.allocPrintZ(allocator, "zeus-zig | frames: {d} , updates: {d}, delta: {d} ", .{
                 self.engine_time.?.frames,
                 self.engine_time.?.updates,
@@ -292,6 +299,14 @@ pub const Shader = struct {
     }
 };
 
+pub const Texture = struct {
+    texture_coords: []f32 = [_]f32{
+        0.0, 0.0, // lower-left corner
+        1.0, 0.0, // lower-right corner
+        0.5, 1.0, // top-center corner
+    },
+};
+
 pub fn gl_log() !void {
     var err: gl.GLenum = gl.getError();
     const has_err = err != gl.getError();
@@ -302,7 +317,7 @@ pub fn gl_log() !void {
             gl.INVALID_OPERATION => "INVALID_OPERATION",
             gl.OUT_OF_MEMORY => "OUT_OF_MEMORY",
             gl.INVALID_FRAMEBUFFER_OPERATION => "INVALID_FRAMEBUFFER_OPERATION",
-            else => "UNKNOWN_ERROR",
+            else => "UNKNOWN_OPENGL_ERROR",
         };
 
         std.log.err("Found OpenGL error: {s}", .{err_string});
@@ -310,7 +325,5 @@ pub fn gl_log() !void {
         err = gl.getError();
     }
 
-    if (has_err) {
-        return Engine.Error.GLError;
-    }
+    if (has_err) return Engine.Error.GLError;
 }

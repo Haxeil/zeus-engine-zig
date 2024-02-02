@@ -1,28 +1,31 @@
 const std = @import("std");
 const time = std.time;
 
-const NS_PER_FPS: f32 = 1_000_000_000.0 / 60.0;
+const NS_PER_FPS: f64 = 1_000_000_000.0 / 900.0;
 
 pub const EngineTime = struct {
     delta: f32,
     frames: u32,
     updates: u32,
-    last_time: time.Timer,
+    get_timer: *time.Timer,
+    last_time: f64,
 
     const Self = @This();
 
-    pub fn init() !Self {
+    pub fn init(get_timer: *time.Timer) !Self {
         return .{
             .delta = 0.0,
             .frames = 0,
             .updates = 0,
-            .last_time = try time.Timer.start(),
+            .get_timer = get_timer,
+            .last_time = @as(f64, @floatFromInt(time.nanoTimestamp())),
         };
     }
 
     pub fn update(self: *Self) !void {
-        var now = try time.Timer.start();
+        var now: f64 = @as(f64, @floatFromInt(time.nanoTimestamp()));
 
-        self.delta += @as(f32, @floatFromInt(self.last_time.read() - now.read())) / NS_PER_FPS;
+        self.delta += @floatCast((now - self.last_time) / NS_PER_FPS);
+        self.last_time = now;
     }
 };
