@@ -44,11 +44,9 @@ pub const Engine = struct {
         const proc: glfw.GLProc = undefined;
         try gl.load(proc, glGetProcAddress);
 
-        var get_time = try std.time.Timer.start();
-
         var engine = Engine{
             .window = window,
-            .engine_time = try time.EngineTime.init(&get_time),
+            .engine_time = try time.EngineTime.init(),
             .timer = @floatFromInt(std.time.milliTimestamp()),
         };
 

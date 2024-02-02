@@ -28,14 +28,13 @@ pub fn build(b: *std.Build) void {
         .target = exe.target,
         .optimize = exe.optimize,
     });
+
     exe.addModule("mach-glfw", glfw_dep.module("mach-glfw"));
     @import("mach_glfw").link(glfw_dep.builder, exe);
 
     exe.addModule("gl", b.createModule(.{
         .source_file = .{ .path = "libs/gl.zig" },
     }));
-
-    b.installArtifact(exe);
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
