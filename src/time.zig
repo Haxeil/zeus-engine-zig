@@ -1,7 +1,7 @@
 const std = @import("std");
 const time = std.time;
 
-const NS_PER_FPS: f64 = 1_000_000_000.0 / 30.0;
+const NS_PER_FPS: f64 = 1_000_000_000.0 / 60.0;
 
 pub const EngineTime = struct {
     delta: f32,
