@@ -50,10 +50,11 @@ pub const Engine = struct {
             .timer = @floatFromInt(std.time.milliTimestamp()),
         };
 
-        std.debug.print("timer: {}", .{engine.timer});
         engine.camera.engine = &engine;
 
         engine.camera.update_projection_matrix();
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.CULL_FACE);
 
         return engine;
     }
@@ -65,13 +66,8 @@ pub const Engine = struct {
         self.engine_time.?.update() catch {};
 
         gl.viewport(0, 0, @intCast(self.window.?.getSize().width), @intCast(self.window.?.getSize().height));
-
-        while (self.engine_time.?.delta >= 1) {
-            self.engine_time.?.updates += 1;
-            self.engine_time.?.delta -= 1;
-
-            gl.clearColor(0.960, 0.960, 0.960, 1);
-        }
+        gl.clearColor(0.960, 0.960, 0.960, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         return !self.window.?.shouldClose();
     }
@@ -83,7 +79,7 @@ pub const Engine = struct {
         if ((@as(f64, @floatFromInt(std.time.milliTimestamp())) - self.timer) >= 1_000) {
             self.timer += 1_000;
             // not working
-            var raw_string = try std.fmt.allocPrintZ(allocator, "zeus-zig | frames: {d} , updates: {d}, delta: {d} ", .{
+            var raw_string = try std.fmt.allocPrintZ(allocator, "zeus-zig | fps: {d} , ups: {d}, delta: {d:.4} ", .{
                 self.engine_time.?.frames,
                 self.engine_time.?.updates,
                 self.engine_time.?.delta,
@@ -99,6 +95,20 @@ pub const Engine = struct {
 
     pub fn deinit(self: Self) void {
         self.window.?.destroy();
+    }
+};
+
+pub const Vertex = extern struct {
+    position: math.Vec3 = math.vec3(0, 0, 0),
+    uv: math.Vec2 = math.vec2(0, 0),
+    normal: math.Vec3 = math.vec3(0, 0, 0),
+    color: math.Vec4 = math.vec4(0, 0, 0, 0),
+
+    fn create_attributes() void {
+        Mesh.add_element(0, false, 3, @offsetOf(Vertex, "position"));
+        Mesh.add_element(1, false, 2, @offsetOf(Vertex, "uv"));
+        Mesh.add_element(2, false, 3, @offsetOf(Vertex, "normal"));
+        Mesh.add_element(3, false, 3, @offsetOf(Vertex, "color"));
     }
 };
 
@@ -130,7 +140,7 @@ pub const Camera = struct {
 pub const Mesh = struct {
     const ArrayList = std.ArrayList;
 
-    vertices: ArrayList(f32),
+    vertices: ArrayList(Vertex),
     indices: ArrayList(u32),
 
     vao: u32 = undefined,
@@ -141,9 +151,15 @@ pub const Mesh = struct {
 
     pub fn init(allocator: std.mem.Allocator) Mesh {
         return .{
-            .vertices = ArrayList(f32).init(allocator),
+            .vertices = ArrayList(Vertex).init(allocator),
             .indices = ArrayList(u32).init(allocator),
         };
+    }
+
+    fn add_element(attribute_id: u32, normalized: bool, element_count: i32, element_position: u32) void {
+        const _normalized: u8 = if (normalized == true) gl.TRUE else gl.FALSE;
+        gl.vertexAttribPointer(attribute_id, element_count, gl.FLOAT, _normalized, @sizeOf(Vertex), @ptrFromInt(element_position));
+        gl.enableVertexAttribArray(attribute_id);
     }
 
     pub fn create(self: *Self) !void {
@@ -156,10 +172,9 @@ pub const Mesh = struct {
         gl.bindVertexArray(self.vao);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
-        gl.bufferData(gl.ARRAY_BUFFER, @intCast(@sizeOf(u32) * self.vertices.items.len), self.vertices.items.ptr, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(@sizeOf(Vertex) * self.vertices.items.len), self.vertices.items.ptr, gl.STATIC_DRAW);
 
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * @sizeOf(f32), null);
-        gl.enableVertexAttribArray(0);
+        Vertex.create_attributes();
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.ibo);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(@sizeOf(u32) * self.indices.items.len), self.indices.items.ptr, gl.STATIC_DRAW);
